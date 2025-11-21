@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YOLO11 Multi-Layer Detection | Forest Green UI</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <i class="fas fa-layer-group"></i>
+                <span class="brand-text">YOLO11 Multi-Layer</span>
+            </div>
+            <div class="nav-menu">
+                <a href="#" class="nav-link active">
+                    <i class="fas fa-home"></i> 홈
+                </a>
+                <a href="#about" class="nav-link">
+                    <i class="fas fa-info-circle"></i> 소개
+                </a>
+                <a href="#stats" class="nav-link">
+                    <i class="fas fa-chart-bar"></i> 통계
+                </a>
+                <a href="https://github.com/aebonlee/YOLO11_study" target="_blank" class="nav-link">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="container">
+            <div class="hero-content">
+                <h1 class="hero-title animate-bounce">
+                    <span class="gradient-text">다중 레이어</span> 객체 탐지
+                </h1>
+                <p class="hero-subtitle">
+                    4개의 YOLO11 모델을 계층적으로 활용한 고정밀 객체 검출 시스템
+                </p>
+                <div class="hero-features">
+                    <div class="feature-badge">
+                        <i class="fas fa-bolt"></i> 실시간 처리
+                    </div>
+                    <div class="feature-badge">
+                        <i class="fas fa-brain"></i> AI 기반
+                    </div>
+                    <div class="feature-badge">
+                        <i class="fas fa-chart-line"></i> 25% 정확도 향상
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Upload Section -->
+    <section class="upload-section">
+        <div class="container">
+            <div class="upload-card">
+                <div class="upload-header">
+                    <h2 class="section-title">이미지 업로드</h2>
+                    <p class="section-subtitle">분석할 이미지를 선택하세요 (최대 100MB)</p>
+                </div>
+                
+                <!-- Dropzone -->
+                <div class="dropzone" id="dropzone">
+                    <input type="file" id="fileInput" accept="image/*" hidden>
+                    <div class="dropzone-content">
+                        <i class="fas fa-cloud-upload-alt dropzone-icon"></i>
+                        <h3>클릭하거나 드래그하여 업로드</h3>
+                        <p>PNG, JPG, JPEG, BMP, TIFF, WebP 지원</p>
+                    </div>
+                    <div class="preview-container" id="previewContainer" style="display: none;">
+                        <img id="previewImage" src="" alt="Preview">
+                        <button class="btn btn-sm btn-danger" id="clearImage">
+                            <i class="fas fa-times"></i> 제거
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Upload Button -->
+                <button class="btn btn-primary btn-lg animate-bounce" id="uploadBtn" disabled>
+                    <i class="fas fa-upload"></i> 검출 시작
+                </button>
+
+                <!-- Progress Bar -->
+                <div class="progress-container" id="progressContainer" style="display: none;">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progressFill"></div>
+                    </div>
+                    <p class="progress-text" id="progressText">처리 중...</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-section" id="resultsSection" style="display: none;">
+        <div class="container">
+            <div class="results-header">
+                <h2 class="section-title">검출 결과</h2>
+                <div class="results-actions">
+                    <button class="btn btn-secondary" id="downloadBtn">
+                        <i class="fas fa-download"></i> JSON 다운로드
+                    </button>
+                    <button class="btn btn-outline" id="newAnalysisBtn">
+                        <i class="fas fa-redo"></i> 새 분석
+                    </button>
+                </div>
+            </div>
+
+            <!-- Results Grid -->
+            <div class="results-grid">
+                <!-- Result Image -->
+                <div class="result-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-image"></i> 검출 이미지</h3>
+                    </div>
+                    <div class="card-body">
+                        <img id="resultImage" src="" alt="Result">
+                    </div>
+                </div>
+
+                <!-- Statistics -->
+                <div class="result-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-chart-pie"></i> 통계</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="stats-grid">
+                            <div class="stat-item">
+                                <span class="stat-value" id="totalDetections">0</span>
+                                <span class="stat-label">총 검출</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="avgConfidence">0%</span>
+                                <span class="stat-label">평균 신뢰도</span>
+                            </div>
+                            <div class="stat-item">
+                                <span class="stat-value" id="processTime">0s</span>
+                                <span class="stat-label">처리 시간</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Layer Analysis -->
+                <div class="result-card">
+                    <div class="card-header">
+                        <h3><i class="fas fa-layer-group"></i> 레이어별 분석</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="layer-stats" id="layerStats"></div>
+                    </div>
+                </div>
+
+                <!-- Detection List -->
+                <div class="result-card full-width">
+                    <div class="card-header">
+                        <h3><i class="fas fa-list"></i> 검출된 객체</h3>
+                        <input type="text" class="search-input" id="searchInput" placeholder="검색...">
+                    </div>
+                    <div class="card-body">
+                        <div class="detection-list" id="detectionList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section class="about-section" id="about">
+        <div class="container">
+            <h2 class="section-title">시스템 구조</h2>
+            <div class="layer-cards">
+                <div class="layer-card animate-slide">
+                    <div class="layer-icon" style="background: var(--gradient-1);">
+                        <i class="fas fa-rocket"></i>
+                    </div>
+                    <h3>Layer 1: 빠른 스캔</h3>
+                    <p>YOLOv11n을 사용한 초고속 전체 영역 스캔</p>
+                    <span class="layer-badge">100+ FPS</span>
+                </div>
+                <div class="layer-card animate-slide">
+                    <div class="layer-icon" style="background: var(--gradient-2);">
+                        <i class="fas fa-crosshairs"></i>
+                    </div>
+                    <h3>Layer 2: 일반 검출</h3>
+                    <p>YOLOv11s로 균형잡힌 검출 성능</p>
+                    <span class="layer-badge">80+ FPS</span>
+                </div>
+                <div class="layer-card animate-slide">
+                    <div class="layer-icon" style="background: var(--gradient-3);">
+                        <i class="fas fa-microscope"></i>
+                    </div>
+                    <h3>Layer 3: 정밀 검출</h3>
+                    <p>YOLOv11m으로 작고 겹친 객체 검출</p>
+                    <span class="layer-badge">50+ FPS</span>
+                </div>
+                <div class="layer-card animate-slide">
+                    <div class="layer-icon" style="background: var(--gradient-4);">
+                        <i class="fas fa-palette"></i>
+                    </div>
+                    <h3>Layer 4: 세그멘테이션</h3>
+                    <p>YOLOv11-seg로 픽셀 단위 분할</p>
+                    <span class="layer-badge">60+ FPS</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section" id="stats">
+        <div class="container">
+            <h2 class="section-title">시스템 상태</h2>
+            <div class="system-stats" id="systemStats">
+                <div class="stat-card">
+                    <i class="fas fa-server"></i>
+                    <span class="stat-label">서버 상태</span>
+                    <span class="stat-value" id="serverStatus">확인 중...</span>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-microchip"></i>
+                    <span class="stat-label">GPU</span>
+                    <span class="stat-value" id="gpuStatus">확인 중...</span>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-images"></i>
+                    <span class="stat-label">처리된 이미지</span>
+                    <span class="stat-value" id="processedImages">0</span>
+                </div>
+                <div class="stat-card">
+                    <i class="fas fa-memory"></i>
+                    <span class="stat-label">캐시</span>
+                    <span class="stat-value" id="cacheSize">0</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p>© 2025 YOLO11 Multi-Layer Detection</p>
+                    <p>Developed by <a href="https://github.com/aebonlee" target="_blank">aebonlee</a></p>
+                </div>
+                <div class="footer-right">
+                    <a href="https://github.com/aebonlee/YOLO11_study" target="_blank" class="footer-link">
+                        <i class="fab fa-github"></i>
+                    </a>
+                    <a href="#" class="footer-link">
+                        <i class="fas fa-book"></i>
+                    </a>
+                    <a href="#" class="footer-link">
+                        <i class="fas fa-envelope"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
