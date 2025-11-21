@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>실시간 객체 탐지 | YOLO11 Multi-Layer Detection</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="static/css/style.css">
+    
+    <!-- TensorFlow.js and COCO-SSD for object detection -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.10.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.2/dist/coco-ssd.min.js"></script>
+    
+    <style>
+        .detection-container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+        }
+        
+        .detection-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        @media (max-width: 768px) {
+            .detection-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .upload-area {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .canvas-container {
+            position: relative;
+            background: var(--gray-100);
+            border-radius: 0.75rem;
+            overflow: hidden;
+            margin: 1rem 0;
+            min-height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #imageCanvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .detection-box {
+            position: absolute;
+            border: 3px solid;
+            border-radius: 0.25rem;
+            font-family: var(--font-primary);
+            font-weight: 600;
+            pointer-events: none;
+        }
+        
+        .detection-label {
+            position: absolute;
+            top: -25px;
+            left: 0;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+            white-space: nowrap;
+        }
+        
+        .results-area {
+            background: white;
+            border-radius: 1rem;
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            margin: 0.5rem 0;
+            background: var(--gray-50);
+            border-radius: 0.5rem;
+            transition: all 0.3s;
+        }
+        
+        .result-item:hover {
+            background: var(--primary-50);
+            transform: translateX(5px);
+        }
+        
+        .result-class {
+            font-weight: 600;
+            color: var(--gray-900);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .result-confidence {
+            background: var(--gradient-1);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+        
+        .loading-spinner {
+            display: none;
+            width: 50px;
+            height: 50px;
+            border: 4px solid var(--gray-200);
+            border-top-color: var(--primary-500);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            width: 100%;
+        }
+        
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+        
+        .file-input-label {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            padding: 3rem;
+            background: var(--gradient-1);
+            color: white;
+            border-radius: 1rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            font-size: 1.125rem;
+        }
+        
+        .file-input-label:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .file-input-label.has-file {
+            background: var(--primary-100);
+            color: var(--primary-700);
+        }
+        
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin: 2rem 0;
+        }
+        
+        .stat-box {
+            background: var(--gradient-1);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 0.75rem;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            display: block;
+        }
+        
+        .stat-label {
+            font-size: 0.875rem;
+            opacity: 0.9;
+            margin-top: 0.25rem;
+        }
+        
+        .control-buttons {
+            display: flex;
+            gap: 1rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .color-palette {
+            display: flex;
+            gap: 0.5rem;
+            margin: 1rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .color-option {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 3px solid transparent;
+        }
+        
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+        
+        .color-option.active {
+            border-color: var(--gray-800);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .model-info {
+            background: var(--primary-50);
+            border-left: 4px solid var(--primary-500);
+            padding: 1rem;
+            border-radius: 0.5rem;
+            margin: 1rem 0;
+        }
+        
+        .model-info h4 {
+            color: var(--primary-700);
+            margin-bottom: 0.5rem;
+        }
+        
+        .model-info p {
+            color: var(--gray-700);
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="container">
+            <div class="nav-brand">
+                <i class="fas fa-layer-group"></i>
+                <span class="brand-text">YOLO11 Multi-Layer</span>
+            </div>
+            <div class="nav-menu">
+                <a href="index.html" class="nav-link">
+                    <i class="fas fa-home"></i> 홈
+                </a>
+                <a href="detection.html" class="nav-link active">
+                    <i class="fas fa-camera"></i> 구현
+                </a>
+                <a href="index.html#about" class="nav-link">
+                    <i class="fas fa-info-circle"></i> 소개
+                </a>
+                <a href="index.html#docs" class="nav-link">
+                    <i class="fas fa-book"></i> 문서
+                </a>
+                <a href="https://github.com/aebonlee/YOLO11_study" target="_blank" class="nav-link">
+                    <i class="fab fa-github"></i> GitHub
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero" style="padding: 3rem 0;">
+        <div class="container">
+            <h1 class="hero-title" style="font-size: 3rem;">
+                <span class="gradient-text">실시간</span> 객체 탐지
+            </h1>
+            <p class="hero-subtitle" style="max-width: 600px; margin: 0 auto;">
+                브라우저에서 직접 실행되는 AI 객체 탐지 시스템
+            </p>
+        </div>
+    </section>
+
+    <!-- Detection Interface -->
+    <div class="detection-container">
+        <div class="model-info">
+            <h4><i class="fas fa-info-circle"></i> 모델 정보</h4>
+            <p>
+                이 페이지는 TensorFlow.js와 COCO-SSD 모델을 사용하여 브라우저에서 직접 객체 탐지를 수행합니다.
+                80개 클래스의 객체를 실시간으로 탐지할 수 있으며, 서버 연결 없이 클라이언트 사이드에서 작동합니다.
+            </p>
+        </div>
+
+        <div class="detection-grid">
+            <!-- Left: Upload and Canvas -->
+            <div class="upload-area">
+                <h3 style="margin-bottom: 1rem;">
+                    <i class="fas fa-upload"></i> 이미지 업로드
+                </h3>
+                
+                <div class="file-input-wrapper">
+                    <input type="file" id="imageUpload" accept="image/*">
+                    <label for="imageUpload" class="file-input-label" id="uploadLabel">
+                        <i class="fas fa-cloud-upload-alt" style="font-size: 2rem;"></i>
+                        <span>클릭하거나 드래그하여 이미지 선택</span>
+                    </label>
+                </div>
+
+                <div class="canvas-container">
+                    <canvas id="imageCanvas"></canvas>
+                    <div class="loading-spinner" id="loadingSpinner"></div>
+                    <div id="noImageText" style="color: var(--gray-500); text-align: center;">
+                        <i class="fas fa-image" style="font-size: 3rem; opacity: 0.3;"></i>
+                        <p>이미지를 업로드하면 여기에 표시됩니다</p>
+                    </div>
+                </div>
+
+                <div class="control-buttons">
+                    <button class="btn btn-primary" id="detectBtn" disabled>
+                        <i class="fas fa-search"></i> 객체 탐지 시작
+                    </button>
+                    <button class="btn btn-secondary" id="clearBtn" disabled>
+                        <i class="fas fa-trash"></i> 초기화
+                    </button>
+                    <button class="btn btn-outline" id="downloadBtn" disabled>
+                        <i class="fas fa-download"></i> 결과 다운로드
+                    </button>
+                </div>
+
+                <div style="margin-top: 1rem;">
+                    <label style="font-weight: 600; margin-bottom: 0.5rem; display: block;">
+                        <i class="fas fa-palette"></i> 탐지 박스 색상
+                    </label>
+                    <div class="color-palette">
+                        <div class="color-option active" style="background: #10b981;" data-color="#10b981"></div>
+                        <div class="color-option" style="background: #ef4444;" data-color="#ef4444"></div>
+                        <div class="color-option" style="background: #3b82f6;" data-color="#3b82f6"></div>
+                        <div class="color-option" style="background: #f59e0b;" data-color="#f59e0b"></div>
+                        <div class="color-option" style="background: #8b5cf6;" data-color="#8b5cf6"></div>
+                        <div class="color-option" style="background: #ec4899;" data-color="#ec4899"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right: Results -->
+            <div class="results-area">
+                <h3 style="margin-bottom: 1rem;">
+                    <i class="fas fa-chart-bar"></i> 탐지 결과
+                </h3>
+                
+                <div class="stats-row">
+                    <div class="stat-box">
+                        <span class="stat-value" id="totalObjects">0</span>
+                        <span class="stat-label">총 객체 수</span>
+                    </div>
+                    <div class="stat-box" style="background: var(--gradient-2);">
+                        <span class="stat-value" id="avgConfidence">0%</span>
+                        <span class="stat-label">평균 신뢰도</span>
+                    </div>
+                    <div class="stat-box" style="background: var(--gradient-3);">
+                        <span class="stat-value" id="processTime">0ms</span>
+                        <span class="stat-label">처리 시간</span>
+                    </div>
+                </div>
+
+                <div id="resultsList">
+                    <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+                        <i class="fas fa-cube" style="font-size: 3rem; opacity: 0.3;"></i>
+                        <p style="margin-top: 1rem;">탐지된 객체가 여기에 표시됩니다</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Information -->
+        <div style="margin-top: 3rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;">
+            <div class="upload-area">
+                <h4><i class="fas fa-robot"></i> 탐지 가능한 객체 (80개 클래스)</h4>
+                <p style="color: var(--gray-600); line-height: 1.8; margin-top: 1rem;">
+                    사람, 자전거, 자동차, 오토바이, 비행기, 버스, 기차, 트럭, 보트, 신호등, 
+                    소화전, 정지 표지판, 주차 미터기, 벤치, 새, 고양이, 개, 말, 양, 소, 
+                    코끼리, 곰, 얼룩말, 기린, 배낭, 우산, 핸드백, 넥타이, 가방, 프리스비, 
+                    스키, 스노보드, 공, 연, 야구 방망이, 야구 글러브, 스케이트보드, 서핑보드, 
+                    테니스 라켓, 병, 와인잔, 컵, 포크, 나이프, 숟가락, 그릇, 바나나, 사과, 
+                    샌드위치, 오렌지, 브로콜리, 당근, 핫도그, 피자, 도넛, 케이크, 의자, 
+                    소파, 화분, 침대, 식탁, 화장실, TV, 노트북, 마우스, 리모컨, 키보드, 
+                    휴대폰, 전자레인지, 오븐, 토스터, 싱크대, 냉장고, 책, 시계, 꽃병, 
+                    가위, 테디베어, 헤어드라이어, 칫솔
+                </p>
+            </div>
+            
+            <div class="upload-area">
+                <h4><i class="fas fa-lightbulb"></i> 사용 팁</h4>
+                <ul style="color: var(--gray-600); line-height: 2; margin-top: 1rem; padding-left: 1.5rem;">
+                    <li>명확하고 밝은 이미지를 사용하면 탐지 정확도가 향상됩니다</li>
+                    <li>여러 객체가 있는 이미지도 동시에 탐지 가능합니다</li>
+                    <li>JPG, PNG, WebP 등 대부분의 이미지 형식을 지원합니다</li>
+                    <li>탐지된 객체는 색상 박스로 표시됩니다</li>
+                    <li>신뢰도는 0-100% 범위로 표시됩니다</li>
+                    <li>결과 이미지를 다운로드하여 저장할 수 있습니다</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer" style="margin-top: 4rem;">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-left">
+                    <p>© 2025 YOLO11 Multi-Layer Detection</p>
+                    <p>Developed by <a href="https://github.com/aebonlee" target="_blank">aebonlee</a></p>
+                </div>
+                <div class="footer-right">
+                    <a href="https://github.com/aebonlee/YOLO11_study" target="_blank" class="footer-link">
+                        <i class="fab fa-github"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Detection Script -->
+    <script>
+        // Global variables
+        let model = null;
+        let currentImage = null;
+        let detectionResults = [];
+        let selectedColor = '#10b981';
+
+        // DOM Elements
+        const imageUpload = document.getElementById('imageUpload');
+        const uploadLabel = document.getElementById('uploadLabel');
+        const canvas = document.getElementById('imageCanvas');
+        const ctx = canvas.getContext('2d');
+        const detectBtn = document.getElementById('detectBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const noImageText = document.getElementById('noImageText');
+        const resultsList = document.getElementById('resultsList');
+        const totalObjects = document.getElementById('totalObjects');
+        const avgConfidence = document.getElementById('avgConfidence');
+        const processTime = document.getElementById('processTime');
+
+        // Initialize model on page load
+        async function initModel() {
+            try {
+                console.log('Loading COCO-SSD model...');
+                model = await cocoSsd.load();
+                console.log('Model loaded successfully!');
+                showToast('AI 모델 로드 완료!', 'success');
+            } catch (error) {
+                console.error('Error loading model:', error);
+                showToast('모델 로드 실패. 페이지를 새로고침해주세요.', 'error');
+            }
+        }
+
+        // Handle image upload
+        imageUpload.addEventListener('change', handleImageUpload);
+        
+        // Drag and drop support
+        uploadLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadLabel.style.background = 'var(--primary-100)';
+        });
+        
+        uploadLabel.addEventListener('dragleave', () => {
+            uploadLabel.style.background = '';
+        });
+        
+        uploadLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadLabel.style.background = '';
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type.startsWith('image/')) {
+                handleFile(files[0]);
+            }
+        });
+
+        function handleImageUpload(e) {
+            const file = e.target.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    currentImage = img;
+                    displayImage(img);
+                    detectBtn.disabled = false;
+                    clearBtn.disabled = false;
+                    uploadLabel.classList.add('has-file');
+                    uploadLabel.innerHTML = `
+                        <i class="fas fa-image"></i>
+                        <span>${file.name}</span>
+                    `;
+                    noImageText.style.display = 'none';
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function displayImage(img) {
+            // Calculate scale to fit canvas
+            const maxWidth = 600;
+            const maxHeight = 500;
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > maxWidth) {
+                height = (maxWidth / width) * height;
+                width = maxWidth;
+            }
+            if (height > maxHeight) {
+                width = (maxHeight / height) * width;
+                height = maxHeight;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+        }
+
+        // Detect objects
+        detectBtn.addEventListener('click', async () => {
+            if (!model || !currentImage) return;
+            
+            detectBtn.disabled = true;
+            loadingSpinner.style.display = 'block';
+            
+            const startTime = performance.now();
+            
+            try {
+                // Perform detection
+                detectionResults = await model.detect(canvas);
+                
+                const endTime = performance.now();
+                const timeTaken = Math.round(endTime - startTime);
+                
+                // Display results
+                displayResults(detectionResults, timeTaken);
+                drawDetections(detectionResults);
+                
+                downloadBtn.disabled = false;
+                showToast(`${detectionResults.length}개 객체 탐지 완료!`, 'success');
+                
+            } catch (error) {
+                console.error('Detection error:', error);
+                showToast('탐지 중 오류가 발생했습니다.', 'error');
+            } finally {
+                detectBtn.disabled = false;
+                loadingSpinner.style.display = 'none';
+            }
+        });
+
+        function drawDetections(predictions) {
+            // Redraw original image
+            displayImage(currentImage);
+            
+            // Draw detection boxes
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                
+                // Draw box
+                ctx.strokeStyle = selectedColor;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, width, height);
+                
+                // Draw label background
+                const label = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+                ctx.font = 'bold 14px Poppins';
+                const textWidth = ctx.measureText(label).width;
+                
+                ctx.fillStyle = selectedColor;
+                ctx.fillRect(x, y - 25, textWidth + 10, 25);
+                
+                // Draw label text
+                ctx.fillStyle = 'white';
+                ctx.fillText(label, x + 5, y - 7);
+            });
+        }
+
+        function displayResults(predictions, timeTaken) {
+            // Update stats
+            totalObjects.textContent = predictions.length;
+            
+            if (predictions.length > 0) {
+                const avgScore = predictions.reduce((sum, p) => sum + p.score, 0) / predictions.length;
+                avgConfidence.textContent = `${Math.round(avgScore * 100)}%`;
+            } else {
+                avgConfidence.textContent = '0%';
+            }
+            
+            processTime.textContent = `${timeTaken}ms`;
+            
+            // Update results list
+            if (predictions.length === 0) {
+                resultsList.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+                        <i class="fas fa-search" style="font-size: 3rem; opacity: 0.3;"></i>
+                        <p style="margin-top: 1rem;">객체를 찾을 수 없습니다</p>
+                    </div>
+                `;
+            } else {
+                resultsList.innerHTML = predictions.map((prediction, index) => `
+                    <div class="result-item">
+                        <div class="result-class">
+                            <span style="background: ${selectedColor}; color: white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.875rem; font-weight: 600;">
+                                ${index + 1}
+                            </span>
+                            <span>${translateClass(prediction.class)}</span>
+                        </div>
+                        <div class="result-confidence">
+                            ${Math.round(prediction.score * 100)}%
+                        </div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        function translateClass(className) {
+            const translations = {
+                'person': '사람',
+                'bicycle': '자전거',
+                'car': '자동차',
+                'motorcycle': '오토바이',
+                'airplane': '비행기',
+                'bus': '버스',
+                'train': '기차',
+                'truck': '트럭',
+                'boat': '보트',
+                'traffic light': '신호등',
+                'fire hydrant': '소화전',
+                'stop sign': '정지 표지판',
+                'parking meter': '주차 미터기',
+                'bench': '벤치',
+                'bird': '새',
+                'cat': '고양이',
+                'dog': '개',
+                'horse': '말',
+                'sheep': '양',
+                'cow': '소',
+                'elephant': '코끼리',
+                'bear': '곰',
+                'zebra': '얼룩말',
+                'giraffe': '기린',
+                'backpack': '배낭',
+                'umbrella': '우산',
+                'handbag': '핸드백',
+                'tie': '넥타이',
+                'suitcase': '가방',
+                'frisbee': '프리스비',
+                'skis': '스키',
+                'snowboard': '스노보드',
+                'sports ball': '공',
+                'kite': '연',
+                'baseball bat': '야구 방망이',
+                'baseball glove': '야구 글러브',
+                'skateboard': '스케이트보드',
+                'surfboard': '서핑보드',
+                'tennis racket': '테니스 라켓',
+                'bottle': '병',
+                'wine glass': '와인잔',
+                'cup': '컵',
+                'fork': '포크',
+                'knife': '나이프',
+                'spoon': '숟가락',
+                'bowl': '그릇',
+                'banana': '바나나',
+                'apple': '사과',
+                'sandwich': '샌드위치',
+                'orange': '오렌지',
+                'broccoli': '브로콜리',
+                'carrot': '당근',
+                'hot dog': '핫도그',
+                'pizza': '피자',
+                'donut': '도넛',
+                'cake': '케이크',
+                'chair': '의자',
+                'couch': '소파',
+                'potted plant': '화분',
+                'bed': '침대',
+                'dining table': '식탁',
+                'toilet': '화장실',
+                'tv': 'TV',
+                'laptop': '노트북',
+                'mouse': '마우스',
+                'remote': '리모컨',
+                'keyboard': '키보드',
+                'cell phone': '휴대폰',
+                'microwave': '전자레인지',
+                'oven': '오븐',
+                'toaster': '토스터',
+                'sink': '싱크대',
+                'refrigerator': '냉장고',
+                'book': '책',
+                'clock': '시계',
+                'vase': '꽃병',
+                'scissors': '가위',
+                'teddy bear': '테디베어',
+                'hair drier': '헤어드라이어',
+                'toothbrush': '칫솔'
+            };
+            return translations[className] || className;
+        }
+
+        // Clear function
+        clearBtn.addEventListener('click', () => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            canvas.width = 0;
+            canvas.height = 0;
+            currentImage = null;
+            detectionResults = [];
+            imageUpload.value = '';
+            detectBtn.disabled = true;
+            clearBtn.disabled = true;
+            downloadBtn.disabled = true;
+            uploadLabel.classList.remove('has-file');
+            uploadLabel.innerHTML = `
+                <i class="fas fa-cloud-upload-alt" style="font-size: 2rem;"></i>
+                <span>클릭하거나 드래그하여 이미지 선택</span>
+            `;
+            noImageText.style.display = 'block';
+            resultsList.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: var(--gray-500);">
+                    <i class="fas fa-cube" style="font-size: 3rem; opacity: 0.3;"></i>
+                    <p style="margin-top: 1rem;">탐지된 객체가 여기에 표시됩니다</p>
+                </div>
+            `;
+            totalObjects.textContent = '0';
+            avgConfidence.textContent = '0%';
+            processTime.textContent = '0ms';
+        });
+
+        // Download function
+        downloadBtn.addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = `detection_result_${Date.now()}.png`;
+            link.href = canvas.toDataURL();
+            link.click();
+            showToast('이미지 다운로드 완료!', 'success');
+        });
+
+        // Color picker
+        document.querySelectorAll('.color-option').forEach(option => {
+            option.addEventListener('click', function() {
+                document.querySelectorAll('.color-option').forEach(o => o.classList.remove('active'));
+                this.classList.add('active');
+                selectedColor = this.dataset.color;
+                
+                // Redraw with new color if results exist
+                if (detectionResults.length > 0) {
+                    drawDetections(detectionResults);
+                }
+            });
+        });
+
+        // Toast notification
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? 'var(--success)' : type === 'error' ? 'var(--error)' : 'var(--info)'};
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 0.5rem;
+                box-shadow: var(--shadow-xl);
+                z-index: 9999;
+                animation: slideIn 0.3s ease;
+                display: flex;
+                align-items: center;
+                gap: 0.75rem;
+            `;
+            
+            const icon = type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle';
+            toast.innerHTML = `
+                <i class="fas fa-${icon}"></i>
+                <span>${message}</span>
+            `;
+            
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Initialize model when page loads
+        window.addEventListener('load', initModel);
+    </script>
+</body>
+</html>
